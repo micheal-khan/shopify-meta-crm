@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SignalDesk
 
-## Getting Started
+Private internal CRM for ingesting Shopify orders, reporting UTM performance, and delivering eligible new-order `Purchase` events to Meta through the Conversions API.
 
-First, run the development server:
+## What is implemented
+
+- Next.js 16 App Router, TypeScript, Tailwind CSS 4 and shadcn/ui
+- Supabase email/password authentication with Admin, Operator and Viewer roles
+- Admin-controlled invitations and one-time initial-admin bootstrap
+- Multi-store Shopify connections with AES-256-GCM encrypted credentials
+- HMAC-verified, idempotent, durable Shopify webhook receipts
+- 30-day Shopify historical import that is hard-coded as CRM-only
+- Private-schema isolation for customer PII, raw Shopify payloads and connection tokens
+- Meta Purchase construction with normalized SHA-256 matching fields
+- Retryable Meta queue, manual Operator retry and daily scheduled retry
+- Global and per-store fail-closed gates for live Meta sending
+- Live dashboards, order and UTM reports, notifications and CSV/XLSX exports
+- Aggregate-only OpenAI analyst tools; customer PII is never included
+- RLS, explicit Data API grants, audit logs, tests and zero known npm advisories
+
+## Safety contract
+
+1. Historical imports call `ingestShopifyOrder(..., queueMeta: false)` and never create Meta Purchase events.
+2. `META_PRODUCTION_SEND_ENABLED=false` is the global lock. Each store and Meta connection also has a separate database lock.
+3. While locked, a Meta Test Event code is mandatory. Missing test codes fail closed.
+4. Keep browser `InitiateCheckout`. Disable Releasit server-side Purchase before SignalDesk becomes the production sender.
+5. Do not enable live delivery until browser and server Purchase use the same `event_id` and Meta confirms deduplication.
+
+## Local setup
 
 ```bash
+npm install
+npx vercel link
+npx vercel env pull .env.local --environment=development --yes
+npm run check
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Create the first administrator once, after migrations are applied:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run bootstrap-admin -- admin@example.com 'a-strong-12+-character-password' 'Full Name'
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Bootstrap refuses to run after the first profile exists. Further users must be invited from Settings.
 
-## Learn More
+## Store connection requirements
 
-To learn more about Next.js, take a look at the following resources:
+Create a Shopify custom app with `read_orders` and webhook subscription access. Enter its Admin API access token and app client secret in Stores. Optional Meta setup requires a Dataset ID, system-user access token with dataset permission, and a Test Event code. SignalDesk verifies Shopify before saving credentials and registers order create/update/cancel/refund webhooks when `APP_URL` is configured.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Commands
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+npm run check
+npx supabase db lint --linked --schema public,private --level warning --fail-on error
+```
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+All production secrets belong in Vercel/Supabase configuration, never in Git.
