@@ -52,9 +52,9 @@ export async function getAccessibleStoreIds(user: CurrentUser) {
   const admin = createAdminClient();
   if (!admin) return [];
   if (user.role === "admin") {
-    const { data } = await admin.from("stores").select("id");
+    const { data } = await admin.from("stores").select("id").order("created_at");
     return (data ?? []).map((row) => String(row.id));
   }
-  const { data } = await admin.from("store_members").select("store_id").eq("user_id", user.id);
+  const { data } = await admin.from("store_members").select("store_id").eq("user_id", user.id).order("created_at");
   return (data ?? []).map((row) => String(row.store_id));
 }
