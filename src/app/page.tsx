@@ -1,69 +1,27 @@
-import Image from "next/image";
+import Link from "next/link";
+import { BadgeIndianRupee, CircleCheckBig, Download, PackageOpen, RadioTower, ShoppingCart, TriangleAlert } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { campaignRows, getWorkspaceData, money, summarize } from "@/lib/data";
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+export default async function DashboardPage() {
+  const data = await getWorkspaceData(); const summary = summarize(data.orders, data.events); const campaigns = campaignRows(data.orders).slice(0, 5);
+  const metrics = [
+    { label: "Gross sales", value: money(summary.gross), Icon: BadgeIndianRupee }, { label: "Orders", value: summary.count.toLocaleString("en-IN"), Icon: ShoppingCart },
+    { label: "COD share", value: `${summary.codShare.toFixed(1)}%`, Icon: PackageOpen }, { label: "Meta delivery", value: `${summary.deliveryRate.toFixed(1)}%`, Icon: RadioTower },
+  ];
+  return <AppShell><div className="space-y-7 pb-20 lg:pb-0">
+    <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="mb-1 text-sm text-primary">Live operations</p><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Welcome, {data.user.fullName?.split(" ")[0] ?? "Admin"}</h1><p className="mt-2 text-sm text-muted-foreground">Shopify orders and Meta server-event health for the last 30 days.</p></div><Button variant="outline" asChild><Link href="/api/exports/orders?format=csv"><Download className="size-4" /> Export</Link></Button></section>
+    {!data.stores.length && <Card className="border-dashed border-primary/30 bg-primary/[0.04]"><CardContent className="flex flex-col items-start gap-3 p-6"><p className="font-medium">Connect your first store</p><p className="text-sm text-muted-foreground">Add encrypted Shopify and optional Meta Test Events credentials to start importing orders.</p><Button asChild><Link href="/stores">Open store setup</Link></Button></CardContent></Card>}
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(({ label, value, Icon }) => <Card key={label} className="border-white/[0.07] bg-card/60 shadow-none"><CardContent className="p-5"><div className="mb-5 flex items-center justify-between"><span className="text-sm text-muted-foreground">{label}</span><span className="grid size-9 place-items-center rounded-lg bg-white/[0.04]"><Icon className="size-4 text-primary" /></span></div><span className="text-2xl font-semibold tracking-tight">{value}</span><p className="mt-1 text-[11px] text-muted-foreground">Last 30 days</p></CardContent></Card>)}</div>
+    <div className="grid gap-5 xl:grid-cols-[1.55fr_1fr]"><Card className="min-w-0 border-white/[0.07] bg-card/60 shadow-none"><CardHeader><CardTitle>Recent orders</CardTitle><CardDescription>Latest orders received from Shopify</CardDescription></CardHeader><CardContent className="overflow-x-auto px-0"><Table><TableHeader><TableRow><TableHead className="pl-6">Order</TableHead><TableHead>Campaign</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{data.orders.slice(0, 8).map((order) => <TableRow key={String(order.id)}><TableCell className="pl-6 font-medium">{order.shopify_order_number}</TableCell><TableCell className="font-mono text-xs text-muted-foreground">{order.utm_campaign ?? "Unattributed"}</TableCell><TableCell><Badge variant="secondary" className="capitalize">{String(order.status).replaceAll("_", " ")}</Badge></TableCell><TableCell className="text-right">{money(Number(order.total), String(order.currency))}</TableCell></TableRow>)}</TableBody></Table>{!data.orders.length && <Empty text="No orders imported yet." />}</CardContent></Card>
+      <Card className="border-white/[0.07] bg-card/60 shadow-none"><CardHeader><CardTitle>Attribution health</CardTitle><CardDescription>Server event processing status</CardDescription></CardHeader><CardContent className="space-y-5"><div className="rounded-xl border border-primary/15 bg-primary/[0.06] p-4"><div className="flex items-center gap-2 text-sm font-medium text-primary"><CircleCheckBig className="size-4" /> Test-only safety is active</div><p className="mt-1.5 text-xs leading-5 text-muted-foreground">Live Purchase delivery remains locked globally and per store.</p></div>{[["Sent",summary.sent,summary.deliveryRate],["Failed / retrying",summary.failed,summary.failed ? 100-summary.deliveryRate : 0]].map(([label,value,percent]) => <div key={String(label)}><div className="mb-2 flex justify-between text-sm"><span className="text-muted-foreground">{label}</span><span>{value}</span></div><Progress value={Number(percent)} className="h-1.5" /></div>)}</CardContent></Card></div>
+    <Card className="border-white/[0.07] bg-card/60 shadow-none"><CardHeader><CardTitle>Top UTM campaigns</CardTitle><CardDescription>Shopify-reported order revenue</CardDescription></CardHeader><CardContent className="space-y-5">{campaigns.map((campaign) => <div key={campaign.name} className="grid gap-2 sm:grid-cols-[1fr_100px_140px]"><span className="truncate font-mono text-xs">{campaign.name}</span><span className="text-xs text-muted-foreground">{campaign.orders} orders</span><span className="text-sm font-medium sm:text-right">{money(campaign.revenue)}</span></div>)}{!campaigns.length && <p className="text-sm text-muted-foreground">Campaign totals appear after orders are imported.</p>}<div className="flex gap-2 rounded-lg border border-amber-400/15 bg-amber-400/[0.04] p-3 text-xs text-amber-200/80"><TriangleAlert className="size-4 shrink-0" /> UTM reporting is directional; Meta remains the attribution source of truth.</div></CardContent></Card>
+  </div></AppShell>;
 }
+
+function Empty({ text }: { text: string }) { return <p className="p-6 text-sm text-muted-foreground">{text}</p>; }
