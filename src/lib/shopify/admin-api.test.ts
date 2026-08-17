@@ -22,6 +22,12 @@ describe("Shopify client credentials grant", () => {
   it("returns an actionable error when the app is not installed or authorized", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "invalid_client" }), { status: 401 })));
     await expect(exchangeShopifyClientCredentials({ shopDomain: "example.myshopify.com", clientId: "client-id", clientSecret: "very-secret-value" }))
-      .rejects.toThrow("install the app on this store");
+      .rejects.toMatchObject({ code: "invalid_client", message: "Shopify client-credentials exchange failed: invalid_client." });
+  });
+
+  it("detects when Shopify requires the authorization-code flow", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("<title>400 - Oauth error shop_not_permitted</title>", { status: 400 })));
+    await expect(exchangeShopifyClientCredentials({ shopDomain: "example.myshopify.com", clientId: "client-id", clientSecret: "very-secret-value" }))
+      .rejects.toMatchObject({ code: "shop_not_permitted" });
   });
 });

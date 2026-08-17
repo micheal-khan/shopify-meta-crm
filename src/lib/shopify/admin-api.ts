@@ -11,6 +11,13 @@ type ClientCredentialsToken = {
   expiresAt: string;
 };
 
+export class ShopifyClientCredentialsError extends Error {
+  constructor(message: string, public readonly code: string | null = null) {
+    super(message);
+    this.name = "ShopifyClientCredentialsError";
+  }
+}
+
 export async function exchangeShopifyClientCredentials(args: { shopDomain: string; clientId: string; clientSecret: string }): Promise<ClientCredentialsToken> {
   const body = new URLSearchParams({ grant_type: "client_credentials", client_id: args.clientId, client_secret: args.clientSecret });
   const response = await fetch(`https://${args.shopDomain}/admin/oauth/access_token`, {
@@ -19,10 +26,16 @@ export async function exchangeShopifyClientCredentials(args: { shopDomain: strin
     body,
     cache: "no-store",
   });
-  const payload = await response.json().catch(() => null) as { access_token?: string; scope?: string; expires_in?: number; error?: string; error_description?: string } | null;
+  const responseBody = await response.text();
+  const payload = (() => {
+    try { return JSON.parse(responseBody) as { access_token?: string; scope?: string; expires_in?: number; error?: string; error_description?: string }; }
+    catch { return null; }
+  })();
   if (!response.ok || !payload?.access_token || !payload.expires_in) {
-    const reason = payload?.error_description ?? payload?.error ?? `HTTP ${response.status}`;
-    throw new Error(`Shopify client-credentials exchange failed: ${reason}. Release the app version, include read_orders, and install the app on this store in the Dev Dashboard before retrying.`);
+    const htmlCode = responseBody.match(/Oauth error ([a-z_]+)/i)?.[1] ?? null;
+    const code = payload?.error ?? htmlCode;
+    const reason = payload?.error_description ?? code ?? `HTTP ${response.status}`;
+    throw new ShopifyClientCredentialsError(`Shopify client-credentials exchange failed: ${reason}.`, code);
   }
   return {
     accessToken: payload.access_token,
@@ -40,7 +53,7 @@ export async function getShopifyAccessToken(storeId: string) {
   ]);
   if (!store || !connection) throw new Error("Shopify connection was not found.");
 
-  if (connection.auth_method === "legacy_access_token") return decryptSecret(connection.encrypted_access_token);
+  if (["legacy_access_token", "authorization_code"].includes(connection.auth_method)) return decryptSecret(connection.encrypted_access_token);
   const expiresAt = connection.token_expires_at ? new Date(connection.token_expires_at).getTime() : 0;
   if (expiresAt > Date.now() + 30 * 60_000) return decryptSecret(connection.encrypted_access_token);
   if (!connection.client_id || !connection.encrypted_client_secret) throw new Error("Shopify Client ID or Client Secret is missing.");
@@ -115,6 +128,7 @@ type OrderNode = Record<string, unknown> & {
   legacyResourceId: string; name: string; createdAt: string; displayFinancialStatus?: string; displayFulfillmentStatus?: string;
   currencyCode: string; currentSubtotalPriceSet?: { shopMoney: Money }; currentTotalPriceSet?: { shopMoney: Money };
   currentTotalDiscountsSet?: { shopMoney: Money }; currentTotalTaxSet?: { shopMoney: Money }; totalShippingPriceSet?: { shopMoney: Money };
+  customAttributes?: Array<{ key: string; value?: string | null }>;
   lineItems: { nodes: Array<Record<string, unknown>> };
 };
 
@@ -124,7 +138,7 @@ export async function fetchRecentOrders(args: { shopDomain: string; accessToken:
       pageInfo { hasNextPage endCursor }
       nodes {
         legacyResourceId name createdAt updatedAt cancelledAt closedAt email phone currencyCode
-        displayFinancialStatus displayFulfillmentStatus paymentGatewayNames noteAttributes { name value }
+        displayFinancialStatus displayFulfillmentStatus paymentGatewayNames customAttributes { key value }
         currentSubtotalPriceSet { shopMoney { amount } }
         currentTotalPriceSet { shopMoney { amount } }
         currentTotalDiscountsSet { shopMoney { amount } }
@@ -134,7 +148,7 @@ export async function fetchRecentOrders(args: { shopDomain: string; accessToken:
         shippingAddress { firstName lastName address1 address2 city province zip country phone }
         billingAddress { firstName lastName address1 address2 city province zip country phone }
         lineItems(first: 100) { nodes {
-          legacyResourceId title variantTitle sku quantity
+          id title variantTitle sku quantity
           originalUnitPriceSet { shopMoney { amount } }
           totalDiscountSet { shopMoney { amount } }
           product { legacyResourceId } variant { legacyResourceId }
@@ -157,19 +171,25 @@ export async function fetchRecentOrders(args: { shopDomain: string; accessToken:
     cancelled_at: node.cancelledAt, closed_at: node.closedAt, email: node.email, phone: node.phone, currency: node.currencyCode,
     financial_status: node.displayFinancialStatus?.toLowerCase(),
     fulfillment_status: node.displayFulfillmentStatus === "FULFILLED" ? "fulfilled" : node.displayFulfillmentStatus?.toLowerCase(),
-    payment_gateway_names: node.paymentGatewayNames, note_attributes: node.noteAttributes,
+    payment_gateway_names: node.paymentGatewayNames,
+    note_attributes: node.customAttributes?.map((attribute) => ({ name: attribute.key, value: attribute.value })),
     subtotal_price: node.currentSubtotalPriceSet?.shopMoney.amount ?? "0", total_price: node.currentTotalPriceSet?.shopMoney.amount ?? "0",
     total_discounts: node.currentTotalDiscountsSet?.shopMoney.amount ?? "0", total_tax: node.currentTotalTaxSet?.shopMoney.amount ?? "0",
     shipping_lines: [{ price: node.totalShippingPriceSet?.shopMoney.amount ?? "0" }], customer: mapCustomer(node.customer),
     shipping_address: node.shippingAddress, billing_address: node.billingAddress,
     line_items: node.lineItems.nodes.map((line) => ({
-      id: line.legacyResourceId, title: line.title, variant_title: line.variantTitle, sku: line.sku, quantity: line.quantity,
+      id: legacyIdFromGid(line.id), title: line.title, variant_title: line.variantTitle, sku: line.sku, quantity: line.quantity,
       price: (line.originalUnitPriceSet as { shopMoney?: Money } | undefined)?.shopMoney?.amount ?? "0",
       total_discount: (line.totalDiscountSet as { shopMoney?: Money } | undefined)?.shopMoney?.amount ?? "0",
       product_id: (line.product as { legacyResourceId?: string } | undefined)?.legacyResourceId,
       variant_id: (line.variant as { legacyResourceId?: string } | undefined)?.legacyResourceId,
     })),
   }));
+}
+
+function legacyIdFromGid(value: unknown) {
+  if (typeof value !== "string") return value;
+  return value.split("/").at(-1) ?? value;
 }
 
 function mapCustomer(value: unknown) {
