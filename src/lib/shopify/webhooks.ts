@@ -10,6 +10,15 @@ export function verifyShopifyWebhook(rawBody: string, signature: string | null, 
 }
 
 export function normalizeShopDomain(value: string | null) {
-  const domain = value?.trim().toLowerCase() ?? "";
-  return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(domain) ? domain : null;
+  const domain = (value ?? "")
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/[‐‑‒–—―]/g, "-")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .split(/[/?#]/, 1)[0]
+    .replace(/\.$/, "");
+
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.myshopify\.com$/.test(domain) ? domain : null;
 }

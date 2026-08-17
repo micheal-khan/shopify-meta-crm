@@ -26,7 +26,7 @@ export function StoreConnectionForm() {
   }
   return <Card className="border-primary/15 bg-card/60"><CardHeader><CardTitle>Connect a Shopify Dev Dashboard app</CardTitle><CardDescription>Release and install the app on the store first. SignalDesk exchanges the Client ID and Secret server-side and automatically renews the 24-hour token.</CardDescription></CardHeader><CardContent>
     <form action={submit} className="grid gap-4 md:grid-cols-2">
-      <Field label="Store name" name="name" placeholder="Rang-Raze" required /><Field label="myshopify.com domain" name="shopDomain" placeholder="kyyf0v-ez.myshopify.com" required />
+      <Field label="Store name" name="name" placeholder="Rang-Raze" required /><Field label="myshopify.com domain" name="shopDomain" placeholder="kyyf0v-ez.myshopify.com" autoCapitalize="none" autoCorrect="off" spellCheck={false} required />
       <Field label="Shopify app Client ID" name="shopifyClientId" placeholder="From Dev Dashboard → Settings" required /><Field label="Shopify app Client Secret" name="shopifyClientSecret" type="password" required />
       <Field label="Meta Dataset ID (optional)" name="datasetId" /><Field label="Meta system-user access token (optional)" name="metaAccessToken" type="password" />
       <Field label="Meta Test Event code" name="testEventCode" placeholder="TEST12345" />

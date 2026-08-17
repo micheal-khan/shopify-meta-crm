@@ -12,6 +12,9 @@ describe("Shopify webhook security", () => {
   });
   it("normalizes only valid myshopify domains", () => {
     expect(normalizeShopDomain("  STORE-1.myshopify.com ")).toBe("store-1.myshopify.com");
+    expect(normalizeShopDomain("kyyf0v-ez.myshopify.com")).toBe("kyyf0v-ez.myshopify.com");
+    expect(normalizeShopDomain("https://KYYF0V‑EZ.myshopify.com/admin/orders?status=open")).toBe("kyyf0v-ez.myshopify.com");
     expect(normalizeShopDomain("store.example.com")).toBeNull();
+    expect(normalizeShopDomain("-store.myshopify.com")).toBeNull();
   });
 });

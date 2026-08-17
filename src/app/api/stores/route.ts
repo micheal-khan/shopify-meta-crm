@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Invalid store configuration" }, { status: 400 });
   const shopDomain = normalizeShopDomain(parsed.data.shopDomain);
-  if (!shopDomain) return Response.json({ error: "Enter a valid myshopify.com domain." }, { status: 400 });
+  if (!shopDomain) return Response.json({ error: "Enter the store's myshopify.com domain, for example kyyf0v-ez.myshopify.com." }, { status: 400 });
   let token;
   let verified;
   try {
