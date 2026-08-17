@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
-import { registerOrderWebhooks, verifyShopifyConnection } from "@/lib/shopify/admin-api";
+import { missingShopifyOrderReadScopes, registerOrderWebhooks, verifyShopifyConnection } from "@/lib/shopify/admin-api";
 import { exchangeShopifyAuthorizationCode, verifyShopifyOAuthHmac } from "@/lib/shopify/oauth";
 import { normalizeShopDomain } from "@/lib/shopify/webhooks";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -57,7 +57,8 @@ export async function GET(request: Request) {
       clientSecret: pending.shopifyClientSecret,
       code,
     });
-    if (!token.scopes.includes("read_orders")) throw new Error("Shopify did not grant the required read_orders scope.");
+    const missingScopes = missingShopifyOrderReadScopes(token.scopes);
+    if (missingScopes.length) throw new Error(`Shopify did not grant the required scopes: ${missingScopes.join(", ")}.`);
     const verified = await verifyShopifyConnection(shopDomain, token.accessToken);
     const admin = createAdminClient();
     if (!admin) throw new Error("Database is not configured.");

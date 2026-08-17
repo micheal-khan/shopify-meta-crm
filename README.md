@@ -46,7 +46,7 @@ Bootstrap refuses to run after the first profile exists. Further users must be i
 
 ## Store connection requirements
 
-Create and release a Shopify Dev Dashboard app version with `read_orders`, then install the app on each store. Enter the store domain, Client ID and Client Secret in Stores. SignalDesk first uses Shopify's client-credentials grant for eligible organization-owned stores and automatically falls back to the authorization-code flow when Shopify returns `shop_not_permitted`. Add `${APP_URL}/api/shopify/oauth/callback` to the app version's allowed redirection URLs. The Client Secret also verifies webhook HMAC signatures. Optional Meta setup requires a Dataset ID, system-user access token with dataset permission, and a Test Event code. SignalDesk registers order create/update/cancel/refund and app-uninstalled webhooks against `SHOPIFY_WEBHOOK_BASE_URL` when set, otherwise `APP_URL`.
+Create and release a Shopify Dev Dashboard app version with the read-only scope `read_orders`, then install the app on each store. Enter the store domain, Client ID and Client Secret in Stores. SignalDesk first uses Shopify's client-credentials grant for eligible organization-owned stores and automatically falls back to the authorization-code flow when Shopify returns `shop_not_permitted`. Add `${APP_URL}/api/shopify/oauth/callback` to the app version's allowed redirection URLs. The Client Secret also verifies webhook HMAC signatures. Optional Meta setup requires a Dataset ID, system-user access token with dataset permission, and a Test Event code. SignalDesk registers order create/update/cancel/refund and app-uninstalled webhooks against `SHOPIFY_WEBHOOK_BASE_URL` when set, otherwise `APP_URL`.
 
 ## Commands
 

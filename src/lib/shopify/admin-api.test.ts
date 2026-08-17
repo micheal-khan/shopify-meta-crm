@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { exchangeShopifyClientCredentials } from "./admin-api";
+import { exchangeShopifyClientCredentials, missingShopifyOrderReadScopes, SHOPIFY_ORDER_READ_SCOPES } from "./admin-api";
 
 describe("Shopify client credentials grant", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("requires the read-only scopes used by the order importer", () => {
+    expect(SHOPIFY_ORDER_READ_SCOPES).toEqual(["read_orders"]);
+    expect(missingShopifyOrderReadScopes(["read_orders"])).toEqual([]);
+  });
 
   it("exchanges app credentials using form encoding without returning the secret", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ access_token: "shpat_test", scope: "read_orders,read_products", expires_in: 86399 }), {

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
 import { normalizeShopDomain } from "@/lib/shopify/webhooks";
-import { exchangeShopifyClientCredentials, registerOrderWebhooks, ShopifyClientCredentialsError, verifyShopifyConnection } from "@/lib/shopify/admin-api";
+import { exchangeShopifyClientCredentials, missingShopifyOrderReadScopes, registerOrderWebhooks, SHOPIFY_ORDER_READ_SCOPES, ShopifyClientCredentialsError, verifyShopifyConnection } from "@/lib/shopify/admin-api";
 import { buildShopifyAuthorizationUrl } from "@/lib/shopify/oauth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -26,7 +26,8 @@ export async function POST(request: Request) {
   let verified;
   try {
     token = await exchangeShopifyClientCredentials({ shopDomain, clientId: parsed.data.shopifyClientId, clientSecret: parsed.data.shopifyClientSecret });
-    if (!token.scopes.includes("read_orders")) throw new Error("The released Shopify app version must include the read_orders scope.");
+    const missingScopes = missingShopifyOrderReadScopes(token.scopes);
+    if (missingScopes.length) throw new Error(`The released Shopify app version must include: ${missingScopes.join(", ")}.`);
     verified = await verifyShopifyConnection(shopDomain, token.accessToken);
   }
   catch (error) {
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
           clientId: parsed.data.shopifyClientId,
           redirectUri,
           state,
-          scopes: ["read_orders"],
+          scopes: [...SHOPIFY_ORDER_READ_SCOPES],
         }),
       }, { status: 202 });
     }

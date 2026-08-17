@@ -11,6 +11,12 @@ type ClientCredentialsToken = {
   expiresAt: string;
 };
 
+export const SHOPIFY_ORDER_READ_SCOPES = ["read_orders"] as const;
+
+export function missingShopifyOrderReadScopes(scopes: string[]) {
+  return SHOPIFY_ORDER_READ_SCOPES.filter((scope) => !scopes.includes(scope));
+}
+
 export class ShopifyClientCredentialsError extends Error {
   constructor(message: string, public readonly code: string | null = null) {
     super(message);
@@ -144,14 +150,12 @@ export async function fetchRecentOrders(args: { shopDomain: string; accessToken:
         currentTotalDiscountsSet { shopMoney { amount } }
         currentTotalTaxSet { shopMoney { amount } }
         totalShippingPriceSet { shopMoney { amount } }
-        customer { legacyResourceId firstName lastName email phone }
         shippingAddress { firstName lastName address1 address2 city province zip country phone }
         billingAddress { firstName lastName address1 address2 city province zip country phone }
         lineItems(first: 100) { nodes {
           id title variantTitle sku quantity
           originalUnitPriceSet { shopMoney { amount } }
           totalDiscountSet { shopMoney { amount } }
-          product { legacyResourceId } variant { legacyResourceId }
         } }
       }
     }
@@ -175,14 +179,14 @@ export async function fetchRecentOrders(args: { shopDomain: string; accessToken:
     note_attributes: node.customAttributes?.map((attribute) => ({ name: attribute.key, value: attribute.value })),
     subtotal_price: node.currentSubtotalPriceSet?.shopMoney.amount ?? "0", total_price: node.currentTotalPriceSet?.shopMoney.amount ?? "0",
     total_discounts: node.currentTotalDiscountsSet?.shopMoney.amount ?? "0", total_tax: node.currentTotalTaxSet?.shopMoney.amount ?? "0",
-    shipping_lines: [{ price: node.totalShippingPriceSet?.shopMoney.amount ?? "0" }], customer: mapCustomer(node.customer),
+    shipping_lines: [{ price: node.totalShippingPriceSet?.shopMoney.amount ?? "0" }], customer: null,
     shipping_address: node.shippingAddress, billing_address: node.billingAddress,
     line_items: node.lineItems.nodes.map((line) => ({
       id: legacyIdFromGid(line.id), title: line.title, variant_title: line.variantTitle, sku: line.sku, quantity: line.quantity,
       price: (line.originalUnitPriceSet as { shopMoney?: Money } | undefined)?.shopMoney?.amount ?? "0",
       total_discount: (line.totalDiscountSet as { shopMoney?: Money } | undefined)?.shopMoney?.amount ?? "0",
-      product_id: (line.product as { legacyResourceId?: string } | undefined)?.legacyResourceId,
-      variant_id: (line.variant as { legacyResourceId?: string } | undefined)?.legacyResourceId,
+      product_id: null,
+      variant_id: null,
     })),
   }));
 }
@@ -190,10 +194,4 @@ export async function fetchRecentOrders(args: { shopDomain: string; accessToken:
 function legacyIdFromGid(value: unknown) {
   if (typeof value !== "string") return value;
   return value.split("/").at(-1) ?? value;
-}
-
-function mapCustomer(value: unknown) {
-  if (!value || typeof value !== "object") return null;
-  const customer = value as Record<string, unknown>;
-  return { id: customer.legacyResourceId, first_name: customer.firstName, last_name: customer.lastName, email: customer.email, phone: customer.phone };
 }
