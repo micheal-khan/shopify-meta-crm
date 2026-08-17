@@ -2,12 +2,12 @@ import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
 import { normalizeShopDomain } from "@/lib/shopify/webhooks";
-import { registerOrderWebhooks, verifyShopifyConnection } from "@/lib/shopify/admin-api";
+import { exchangeShopifyClientCredentials, registerOrderWebhooks, verifyShopifyConnection } from "@/lib/shopify/admin-api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const schema = z.object({
-  name: z.string().trim().min(2).max(80), shopDomain: z.string().trim().min(4), shopifyAccessToken: z.string().trim().min(10),
-  shopifyAppSecret: z.string().trim().min(10), datasetId: z.string().trim().optional(), metaAccessToken: z.string().trim().optional(),
+  name: z.string().trim().min(2).max(80), shopDomain: z.string().trim().min(4), shopifyClientId: z.string().trim().min(8),
+  shopifyClientSecret: z.string().trim().min(16), datasetId: z.string().trim().optional(), metaAccessToken: z.string().trim().optional(),
   testEventCode: z.string().trim().optional(), historicalSyncDays: z.number().int().min(1).max(60).default(30),
 }).refine((value) => Boolean(value.datasetId) === Boolean(value.metaAccessToken), { message: "Meta Dataset ID and access token must be supplied together." });
 
@@ -18,8 +18,13 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Invalid store configuration" }, { status: 400 });
   const shopDomain = normalizeShopDomain(parsed.data.shopDomain);
   if (!shopDomain) return Response.json({ error: "Enter a valid myshopify.com domain." }, { status: 400 });
+  let token;
   let verified;
-  try { verified = await verifyShopifyConnection(shopDomain, parsed.data.shopifyAccessToken); }
+  try {
+    token = await exchangeShopifyClientCredentials({ shopDomain, clientId: parsed.data.shopifyClientId, clientSecret: parsed.data.shopifyClientSecret });
+    if (!token.scopes.includes("read_orders")) throw new Error("The released Shopify app version must include the read_orders scope.");
+    verified = await verifyShopifyConnection(shopDomain, token.accessToken);
+  }
   catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Shopify connection failed" }, { status: 400 }); }
   const admin = createAdminClient();
   if (!admin) return Response.json({ error: "Database is not configured" }, { status: 503 });
@@ -29,8 +34,17 @@ export async function POST(request: Request) {
   }, { onConflict: "shop_domain" }).select("id").single();
   if (storeError || !store) return Response.json({ error: storeError?.message ?? "Store could not be saved" }, { status: 500 });
   const { error: connectionError } = await admin.schema("private").from("shopify_connections").upsert({
-    store_id: store.id, encrypted_access_token: encryptSecret(parsed.data.shopifyAccessToken), webhook_secret_ciphertext: encryptSecret(parsed.data.shopifyAppSecret),
-    scopes: ["read_orders"], shopify_api_version: process.env.SHOPIFY_API_VERSION ?? "2026-07", rotated_at: new Date().toISOString(),
+    store_id: store.id,
+    client_id: parsed.data.shopifyClientId,
+    encrypted_client_secret: encryptSecret(parsed.data.shopifyClientSecret),
+    encrypted_access_token: encryptSecret(token.accessToken),
+    webhook_secret_ciphertext: encryptSecret(parsed.data.shopifyClientSecret),
+    token_expires_at: token.expiresAt,
+    token_refreshed_at: new Date().toISOString(),
+    auth_method: "client_credentials",
+    scopes: token.scopes,
+    shopify_api_version: process.env.SHOPIFY_API_VERSION ?? "2026-07",
+    rotated_at: new Date().toISOString(),
   });
   if (connectionError) return Response.json({ error: connectionError.message }, { status: 500 });
   const { data: team } = await admin.from("profiles").select("id,role").neq("role", "admin");
@@ -49,6 +63,6 @@ export async function POST(request: Request) {
   await admin.from("audit_logs").insert({ actor_id: auth.user.id, store_id: store.id, action: "store.connected", entity_type: "store", entity_id: store.id,
     metadata: { shop_domain: shopDomain, meta_configured: Boolean(parsed.data.datasetId) } });
   const appUrl = process.env.APP_URL?.replace(/\/$/, "");
-  const webhooks = appUrl ? await registerOrderWebhooks({ shopDomain, accessToken: parsed.data.shopifyAccessToken, callbackUrl: `${appUrl}/api/webhooks/shopify` }) : [];
-  return Response.json({ storeId: store.id, verifiedShop: verified.shop.name, webhooks, historicalImportReady: true }, { status: 201 });
+  const webhooks = appUrl ? await registerOrderWebhooks({ shopDomain, accessToken: token.accessToken, callbackUrl: `${appUrl}/api/webhooks/shopify` }) : [];
+  return Response.json({ storeId: store.id, verifiedShop: verified.shop.name, tokenExpiresAt: token.expiresAt, webhooks, historicalImportReady: true }, { status: 201 });
 }
