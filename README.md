@@ -9,7 +9,11 @@ Private internal CRM for ingesting Shopify orders, reporting UTM performance, an
 - Admin-controlled invitations and one-time initial-admin bootstrap
 - Multi-store Shopify connections with AES-256-GCM encrypted credentials
 - HMAC-verified, idempotent, durable Shopify webhook receipts
+- Searchable, filterable and server-paginated 30-day order operations with secure order details
 - 30-day Shopify historical import that is hard-coded as CRM-only
+- Daily seven-day reconciliation of recently updated orders, refunds and missed webhook work
+- Shopify lifecycle, COD, refund and UTM reporting with honest RTO-unavailable state
+- Store-level webhook health, background-job progress and actionable in-app notifications
 - Private-schema isolation for customer PII, raw Shopify payloads and connection tokens
 - Meta Purchase construction with normalized SHA-256 matching fields
 - Retryable Meta queue, manual Operator retry and daily scheduled retry
@@ -60,3 +64,11 @@ npx supabase db lint --linked --schema public,private --level warning --fail-on 
 ```
 
 All production secrets belong in Vercel/Supabase configuration, never in Git.
+
+## Phase 1 Shopify MVP
+
+Phase 1 is the Shopify operations product. It includes store authorization, order imports, continuous webhook ingestion, daily reconciliation, role-aware order access, lifecycle reporting, exports and notifications. Both historical import and reconciliation pass `queueMeta: false`; they cannot create or send Meta events.
+
+The RTO metric remains explicitly unavailable until a carrier or fulfillment integration provides a reliable RTO status. It is not inferred from Shopify cancellation or refund data.
+
+Phase 2 is the separate Meta activation gate. Existing Meta screens and fail-closed controls remain in the repository, but should not be activated until Dataset credentials, test-event verification and browser/server deduplication are complete.

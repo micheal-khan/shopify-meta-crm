@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { exchangeShopifyClientCredentials, missingShopifyOrderReadScopes, SHOPIFY_ORDER_READ_SCOPES } from "./admin-api";
+import { exchangeShopifyClientCredentials, fetchRecentOrders, missingShopifyOrderReadScopes, SHOPIFY_ORDER_READ_SCOPES } from "./admin-api";
 
 describe("Shopify client credentials grant", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -34,5 +34,20 @@ describe("Shopify client credentials grant", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("<title>400 - Oauth error shop_not_permitted</title>", { status: 400 })));
     await expect(exchangeShopifyClientCredentials({ shopDomain: "example.myshopify.com", clientId: "client-id", clientSecret: "very-secret-value" }))
       .rejects.toMatchObject({ code: "shop_not_permitted" });
+  });
+
+  it("reconciles by updated time and maps Shopify refund totals", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { orders: {
+      pageInfo: { hasNextPage: false, endCursor: null },
+      nodes: [{ legacyResourceId: "123", name: "#123", createdAt: "2026-08-16T10:00:00Z", updatedAt: "2026-08-17T10:00:00Z",
+        currencyCode: "INR", lineItems: { nodes: [] }, refunds: [{ legacyResourceId: "456", createdAt: "2026-08-17T09:00:00Z",
+          totalRefundedSet: { shopMoney: { amount: "499.00" } } }] }],
+    } } }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const orders = await fetchRecentOrders({ shopDomain: "example.myshopify.com", accessToken: "token", days: 7, dateField: "updated_at" });
+    const request = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body)) as { variables: { query: string; sortKey: string } };
+    expect(request.variables.query).toContain("updated_at:>=");
+    expect(request.variables.sortKey).toBe("UPDATED_AT");
+    expect(orders[0].refunds).toEqual([{ id: "456", created_at: "2026-08-17T09:00:00Z", transactions: [{ kind: "refund", amount: "499.00" }] }]);
   });
 });

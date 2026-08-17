@@ -60,7 +60,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="hidden border-primary/20 bg-primary/5 text-primary sm:inline-flex"><span className="mr-1.5 size-1.5 rounded-full bg-primary" /> Test mode</Badge>
-            <Button size="icon" variant="ghost" aria-label="Notifications"><Bell className="size-4" /></Button>
+            <Button size="icon" variant="ghost" aria-label="Notifications" className="relative" asChild><Link href="/notifications"><Bell className="size-4" />{Boolean(unread) && <span className="absolute right-1 top-1 size-1.5 rounded-full bg-primary" />}</Link></Button>
             {user.role === "admin" && <Button size="sm" className="hidden sm:inline-flex" asChild><Link href="/stores">Add store</Link></Button>}
           </div>
         </header>

@@ -135,12 +135,13 @@ type OrderNode = Record<string, unknown> & {
   currencyCode: string; currentSubtotalPriceSet?: { shopMoney: Money }; currentTotalPriceSet?: { shopMoney: Money };
   currentTotalDiscountsSet?: { shopMoney: Money }; currentTotalTaxSet?: { shopMoney: Money }; totalShippingPriceSet?: { shopMoney: Money };
   customAttributes?: Array<{ key: string; value?: string | null }>;
+  refunds?: Array<{ legacyResourceId: string; createdAt?: string | null; totalRefundedSet?: { shopMoney: Money } }>;
   lineItems: { nodes: Array<Record<string, unknown>> };
 };
 
-export async function fetchRecentOrders(args: { shopDomain: string; accessToken: string; days: number }) {
-  const query = `query RecentOrders($cursor: String, $query: String!) {
-    orders(first: 100, after: $cursor, query: $query, sortKey: CREATED_AT) {
+export async function fetchRecentOrders(args: { shopDomain: string; accessToken: string; days: number; dateField?: "created_at" | "updated_at" }) {
+  const query = `query RecentOrders($cursor: String, $query: String!, $sortKey: OrderSortKeys!) {
+    orders(first: 100, after: $cursor, query: $query, sortKey: $sortKey) {
       pageInfo { hasNextPage endCursor }
       nodes {
         legacyResourceId name createdAt updatedAt cancelledAt closedAt email phone currencyCode
@@ -150,6 +151,7 @@ export async function fetchRecentOrders(args: { shopDomain: string; accessToken:
         currentTotalDiscountsSet { shopMoney { amount } }
         currentTotalTaxSet { shopMoney { amount } }
         totalShippingPriceSet { shopMoney { amount } }
+        refunds { legacyResourceId createdAt totalRefundedSet { shopMoney { amount } } }
         shippingAddress { firstName lastName address1 address2 city province zip country phone }
         billingAddress { firstName lastName address1 address2 city province zip country phone }
         lineItems(first: 100) { nodes {
@@ -160,12 +162,14 @@ export async function fetchRecentOrders(args: { shopDomain: string; accessToken:
       }
     }
   }`;
+  const dateField = args.dateField ?? "created_at";
   const since = new Date(Date.now() - args.days * 86_400_000).toISOString();
   const collected: OrderNode[] = [];
   let cursor: string | null = null;
   do {
     const data: { orders: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: OrderNode[] } } = await shopifyGraphql({
-      shopDomain: args.shopDomain, accessToken: args.accessToken, query, variables: { cursor, query: `created_at:>=${since}` },
+      shopDomain: args.shopDomain, accessToken: args.accessToken, query,
+      variables: { cursor, query: `${dateField}:>=${since}`, sortKey: dateField === "updated_at" ? "UPDATED_AT" : "CREATED_AT" },
     });
     collected.push(...data.orders.nodes);
     cursor = data.orders.pageInfo.hasNextPage ? data.orders.pageInfo.endCursor : null;
@@ -181,6 +185,8 @@ export async function fetchRecentOrders(args: { shopDomain: string; accessToken:
     total_discounts: node.currentTotalDiscountsSet?.shopMoney.amount ?? "0", total_tax: node.currentTotalTaxSet?.shopMoney.amount ?? "0",
     shipping_lines: [{ price: node.totalShippingPriceSet?.shopMoney.amount ?? "0" }], customer: null,
     shipping_address: node.shippingAddress, billing_address: node.billingAddress,
+    refunds: node.refunds?.map((refund) => ({ id: refund.legacyResourceId, created_at: refund.createdAt,
+      transactions: [{ kind: "refund", amount: refund.totalRefundedSet?.shopMoney.amount ?? "0" }] })),
     line_items: node.lineItems.nodes.map((line) => ({
       id: legacyIdFromGid(line.id), title: line.title, variant_title: line.variantTitle, sku: line.sku, quantity: line.quantity,
       price: (line.originalUnitPriceSet as { shopMoney?: Money } | undefined)?.shopMoney?.amount ?? "0",

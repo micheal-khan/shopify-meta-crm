@@ -65,6 +65,50 @@ export function SyncStoreButton({ storeId, initialRun = null }: { storeId: strin
   </div>;
 }
 
+export function ReconcileStoreButton({ storeId, initialRun = null }: { storeId: string; initialRun?: SyncRun | null }) {
+  const router = useRouter();
+  const [run, setRun] = useState<SyncRun | null>(initialRun);
+  const active = run?.status === "queued" || run?.status === "running";
+
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(async () => {
+      const response = await fetch(`/api/stores/${storeId}/reconcile`, { cache: "no-store" });
+      if (!response.ok) return;
+      const body = await response.json() as { run: SyncRun | null };
+      setRun(body.run);
+      if (body.run?.status === "completed") {
+        toast.success(`${body.run.processed_items} recent Shopify orders checked.`);
+        router.refresh();
+      } else if (body.run?.status === "failed") {
+        toast.error(body.run.error_message ?? "Shopify reconciliation failed.");
+        router.refresh();
+      }
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [active, router, storeId]);
+
+  async function startReconciliation() {
+    const response = await fetch(`/api/stores/${storeId}/reconcile`, { method: "POST" });
+    const body = await response.json() as { run?: SyncRun; error?: string; alreadyRunning?: boolean };
+    if (!response.ok || !body.run) {
+      toast.error(body.error ?? "Could not start Shopify reconciliation.");
+      return;
+    }
+    setRun(body.run);
+    toast.info(body.alreadyRunning ? "Reconciliation is already running." : "Recent Shopify changes are being checked in the background.");
+  }
+
+  return <div className="space-y-2">
+    <Button variant="outline" disabled={active} onClick={startReconciliation}>
+      <RefreshCw className={`size-4 ${active ? "animate-spin" : ""}`} />
+      {active ? "Checking updates" : "Reconcile recent changes"}
+    </Button>
+    {active && <p className="text-xs text-muted-foreground">Checking the last 7 days and retrying missed webhooks. You can leave this page.</p>}
+    {run?.status === "failed" && <p className="flex items-start gap-1.5 text-xs text-destructive"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" /> {run.error_message ?? "Reconciliation failed. Please retry."}</p>}
+  </div>;
+}
+
 export function RetryMetaButton() {
   const router = useRouter(); const [pending, setPending] = useState(false); const [message, setMessage] = useState("");
   return <div className="flex items-center gap-2"><Button variant="outline" disabled={pending} onClick={async () => {

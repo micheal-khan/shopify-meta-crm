@@ -49,8 +49,8 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
 
   const staleBefore = new Date(Date.now() - 10 * 60_000).toISOString();
   await admin.from("sync_runs").update({ status: "failed", error_message: "Import worker timed out. Please retry.", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq("store_id", id).in("status", ["queued", "running"]).lt("updated_at", staleBefore);
-  const { data: activeRun } = await admin.from("sync_runs").select("*").eq("store_id", id).in("status", ["queued", "running"])
+    .eq("store_id", id).eq("resource", "orders").in("status", ["queued", "running"]).lt("updated_at", staleBefore);
+  const { data: activeRun } = await admin.from("sync_runs").select("*").eq("store_id", id).eq("resource", "orders").in("status", ["queued", "running"])
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (activeRun) return Response.json({ run: activeRun, alreadyRunning: true }, { status: 202 });
 
