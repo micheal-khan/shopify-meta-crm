@@ -174,6 +174,10 @@ export async function processWebhookReceipt(webhookId: string) {
           await admin.from("orders").update({ refunded_total: totalRefunded, status: totalRefunded >= Number(order.total) ? "refunded" : "partially_refunded", updated_at: new Date().toISOString() }).eq("id", order.id);
         }
       }
+    } else if (receipt.topic === "app/uninstalled") {
+      await admin.from("stores").update({ status: "disabled", send_new_orders_to_meta: false, updated_at: new Date().toISOString() }).eq("id", receipt.store_id);
+      await admin.from("notifications").insert({ store_id: receipt.store_id, level: "warning", title: "Shopify app uninstalled",
+        message: "Shopify synchronization and Meta event creation have been disabled for this store.", link: "/stores" });
     }
     await admin.from("shopify_webhooks").update({ status: "processed", processed_at: new Date().toISOString(), error_message: null, updated_at: new Date().toISOString() }).eq("id", webhookId);
   } catch (error) {

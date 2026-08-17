@@ -46,7 +46,7 @@ Bootstrap refuses to run after the first profile exists. Further users must be i
 
 ## Store connection requirements
 
-Create a Shopify custom app with `read_orders` and webhook subscription access. Enter its Admin API access token and app client secret in Stores. Optional Meta setup requires a Dataset ID, system-user access token with dataset permission, and a Test Event code. SignalDesk verifies Shopify before saving credentials and registers order create/update/cancel/refund webhooks when `APP_URL` is configured.
+Create and release a Shopify Dev Dashboard app version with `read_orders`, then install the app on each organization-owned store. Enter the store domain, Client ID and Client Secret in Stores. SignalDesk uses Shopify's client-credentials grant to obtain a 24-hour Admin API token, caches it encrypted, and renews it automatically before expiry. The Client Secret also verifies webhook HMAC signatures. Optional Meta setup requires a Dataset ID, system-user access token with dataset permission, and a Test Event code. SignalDesk registers order create/update/cancel/refund and app-uninstalled webhooks when `APP_URL` is configured.
 
 ## Commands
 

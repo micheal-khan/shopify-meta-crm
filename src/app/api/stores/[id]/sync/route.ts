@@ -1,6 +1,5 @@
 import { getAccessibleStoreIds, requireRole } from "@/lib/auth";
-import { decryptSecret } from "@/lib/crypto";
-import { fetchRecentOrders } from "@/lib/shopify/admin-api";
+import { fetchRecentOrders, getShopifyAccessToken } from "@/lib/shopify/admin-api";
 import { ingestShopifyOrder } from "@/lib/shopify/orders";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -11,13 +10,11 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
   if (!(await getAccessibleStoreIds(auth.user)).includes(id)) return Response.json({ error: "Store access denied" }, { status: 403 });
   const admin = createAdminClient();
   if (!admin) return Response.json({ error: "Database is not configured" }, { status: 503 });
-  const [{ data: store }, { data: connection }] = await Promise.all([
-    admin.from("stores").select("id,shop_domain,historical_sync_days").eq("id", id).single(),
-    admin.schema("private").from("shopify_connections").select("encrypted_access_token").eq("store_id", id).single(),
-  ]);
-  if (!store || !connection) return Response.json({ error: "Store connection was not found" }, { status: 404 });
+  const { data: store } = await admin.from("stores").select("id,shop_domain,historical_sync_days").eq("id", id).single();
+  if (!store) return Response.json({ error: "Store connection was not found" }, { status: 404 });
   try {
-    const orders = await fetchRecentOrders({ shopDomain: store.shop_domain, accessToken: decryptSecret(connection.encrypted_access_token), days: store.historical_sync_days });
+    const accessToken = await getShopifyAccessToken(id);
+    const orders = await fetchRecentOrders({ shopDomain: store.shop_domain, accessToken, days: store.historical_sync_days });
     let imported = 0;
     for (const order of orders) {
       await ingestShopifyOrder({ storeId: store.id, shopDomain: store.shop_domain, order, queueMeta: false });

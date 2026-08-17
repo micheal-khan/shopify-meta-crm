@@ -27,10 +27,11 @@ export async function POST(request: Request) {
   const { data: store, error: storeError } = await supabase.from("stores").select("id").eq("shop_domain", shop).maybeSingle();
   if (storeError) return Response.json({ error: "Store lookup failed" }, { status: 503 });
   if (!store) return Response.json({ error: "Store is not connected" }, { status: 404 });
-  const { data: connection } = await supabase.schema("private").from("shopify_connections").select("webhook_secret_ciphertext").eq("store_id", store.id).maybeSingle();
+  const { data: connection } = await supabase.schema("private").from("shopify_connections").select("encrypted_client_secret,webhook_secret_ciphertext").eq("store_id", store.id).maybeSingle();
   let secret = process.env.SHOPIFY_WEBHOOK_SECRET;
-  if (connection?.webhook_secret_ciphertext) {
-    try { secret = decryptSecret(connection.webhook_secret_ciphertext); } catch { return Response.json({ error: "Webhook verification is unavailable" }, { status: 503 }); }
+  const encryptedSecret = connection?.encrypted_client_secret ?? connection?.webhook_secret_ciphertext;
+  if (encryptedSecret) {
+    try { secret = decryptSecret(encryptedSecret); } catch { return Response.json({ error: "Webhook verification is unavailable" }, { status: 503 }); }
   }
   if (!secret || !verifyShopifyWebhook(rawBody, signature, secret)) return Response.json({ error: "Invalid Shopify webhook" }, { status: 401 });
 
